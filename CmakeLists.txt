@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.10)
+project(MyGraphicsProject)
+
+# Use C++17
+set(CMAKE_CXX_STANDARD 17)
+
+# Set vcpkg triplet if not set
+if(NOT DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_TARGET_TRIPLET "x64-windows")
+endif()
+
+# Find packages installed by vcpkg
+find_package(SDL2 CONFIG REQUIRED)
+find_package(GLEW REQUIRED)
+
+# Set the source files
+file(GLOB SOURCES src/*.cpp)
+
+# Add the executable
+add_executable(MyGraphicsApp ${SOURCES})
+
+# Link libraries using vcpkg targets
+target_link_libraries(MyGraphicsApp 
+    SDL2::SDL2 
+    SDL2::SDL2main 
+    GLEW::GLEW
+)
