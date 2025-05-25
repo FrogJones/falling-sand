@@ -1,3 +1,0 @@
-C:/Users/panfr/OneDrive/VSCode/C++/graphicsProject/build/CMakeFiles/MyGraphicsApp.dir
-C:/Users/panfr/OneDrive/VSCode/C++/graphicsProject/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/panfr/OneDrive/VSCode/C++/graphicsProject/build/CMakeFiles/ZERO_CHECK.dir
