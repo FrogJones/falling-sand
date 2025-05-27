@@ -8,7 +8,7 @@ Still in very early development — much more to come!
 - Basic falling sand behavior
 - Sand particles slide and stack to form hills
 - Mouse-based particle spawning
-- Grid-based simulation rendered with SDL2
+- Grid-based simulation rendered with **GLFW** and **GLAD** (OpenGL)
 
 ## 🚧 Status
 
@@ -17,6 +17,7 @@ Still in very early development — much more to come!
 
 ## 🛠 Requirements
 
-- C++ compiler (GCC, Clang, etc.)
-- [SDL2](https://www.libsdl.org/) development libraries
+- C++ compiler (GCC, Clang, MSVC, etc.)
+- [GLFW](https://www.glfw.org/) development libraries
+- [GLAD](https://glad.dav1d.de/) OpenGL loader
 - CMake (for building)
