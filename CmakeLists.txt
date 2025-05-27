@@ -1,4 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
+
+# Set vcpkg toolchain file before project()
+if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        CACHE STRING "")
+endif()
+
 project(MyGraphicsProject)
 
 # Use C++17
@@ -10,8 +17,8 @@ if(NOT DEFINED VCPKG_TARGET_TRIPLET)
 endif()
 
 # Find packages installed by vcpkg
-find_package(SDL2 CONFIG REQUIRED)
-find_package(GLEW REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(glad CONFIG REQUIRED)
 
 # Set the source files
 file(GLOB SOURCES src/*.cpp)
@@ -21,7 +28,6 @@ add_executable(MyGraphicsApp ${SOURCES})
 
 # Link libraries using vcpkg targets
 target_link_libraries(MyGraphicsApp 
-    SDL2::SDL2 
-    SDL2::SDL2main 
-    GLEW::GLEW
+    glfw
+    glad::glad
 )

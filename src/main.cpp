@@ -1,84 +1,144 @@
-#include <SDL2/SDL.h>
 #include <iostream>
-using namespace std;
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
-void drawSand(int size, int x, int y, SDL_Renderer* renderer, SDL_Color color);
-
-int main(int argc, char* argv[]) {
-    SDL_Window* window = nullptr;
-    SDL_Renderer* renderer = nullptr;
-
-    const int width = 5; // size of each sand grain
-    const int dimensionX = 900;
-    const int dimensionY = 600;
-    const int gridX = dimensionX / width;
-    const int gridY = dimensionY / width;
-
-    int matrix[gridX][gridY] = {0};
-
-    SDL_Init(SDL_INIT_VIDEO);
-    SDL_CreateWindowAndRenderer(dimensionX, dimensionY, 0, &window, &renderer);
-
-    bool running = true;
-    SDL_Event event;
-
-    while (running) {
-        // --- Handle events ---
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) running = false;
-
-            int mouseX, mouseY;
-            SDL_GetMouseState(&mouseX, &mouseY);
-            int cellX = mouseX / width;
-            int cellY = mouseY / width;
-            if (cellX >= 0 && cellX < gridX && cellY >= 0 && cellY < gridY) {
-                matrix[cellX][cellY] = 1; // Add a grain at mouse
-            }
-        }
-
-        // --- Update sand (falling logic) ---
-        for (int j = gridY - 2; j >= 0; --j) { // from bottom-2 up
-            for (int i = 0; i < gridX; ++i) {
-                if (matrix[i][j] == 1 && matrix[i][j+1] == 0) {
-                    matrix[i][j] = 0;
-                    matrix[i][j+1] = 1;
-                } else if (matrix[i][j] == 1 && i > 0 && matrix[i-1][j+1] == 0) {
-                    // Check left diagonal
-                    matrix[i][j] = 0;
-                    matrix[i-1][j+1] = 1;
-                } else if (matrix[i][j] == 1 && i < gridX - 1 && matrix[i+1][j+1] == 0) {
-                    // Check right diagonal
-                    matrix[i][j] = 0;
-                    matrix[i+1][j+1] = 1;
-                }
-            }
-        }
-
-        // --- Render ---
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-
-        for (int i = 0; i < gridX; ++i) {
-            for (int j = 0; j < gridY; ++j) {
-                if (matrix[i][j] == 1) {
-                    SDL_Color color = { Uint8(i*255/gridX), Uint8(j*255/gridY), 255, 255 };
-                    drawSand(width, i * width, j * width, renderer, color);
-                }
-            }
-        }
-
-        SDL_RenderPresent(renderer);
-        SDL_Delay(16); // ~60 FPS
-    }
-
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    return 0;
+// Callback function for window resize
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
 }
 
-void drawSand(int size, int x, int y, SDL_Renderer* renderer, SDL_Color color) {
-    SDL_Rect rect = {x, y, size, size};
-    SDL_SetRenderDrawColor(renderer, color.r, color.b, color.g, 255);
-    SDL_RenderFillRect(renderer, &rect);
+// Process input
+void processInput(GLFWwindow *window) {
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+}
+
+int main() {
+    // Initialize GLFW
+    if (!glfwInit()) {
+        std::cout << "Failed to initialize GLFW" << std::endl;
+        return -1;
+    }
+
+    // Configure GLFW
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    // Create window
+    GLFWwindow* window = glfwCreateWindow(800, 600, "GLFW + GLAD Test", NULL, NULL);
+    if (window == NULL) {
+        std::cout << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+
+    glfwMakeContextCurrent(window);
+
+    // Set the viewport size callback
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+    // Initialize GLAD
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        std::cout << "Failed to initialize GLAD" << std::endl;
+        return -1;
+    }
+
+    // Set viewport
+    glViewport(0, 0, 800, 600);
+
+    float vertices[] = {
+     0.5f,  0.5f, 0.0f,  // top right
+     0.5f, -0.5f, 0.0f,  // bottom right
+    -0.5f, -0.5f, 0.0f,  // bottom left
+    -0.5f,  0.5f, 0.0f   // top left 
+    };
+    unsigned int indices[] = {  // note that we start from 0!
+    0, 1, 3,   // first triangle
+    1, 2, 3    // second triangle
+    };  
+    
+    
+    unsigned int VAO;
+    unsigned int VBO;
+    unsigned int EBO;
+
+    
+    glGenVertexArrays(1, &VAO); 
+    glBindVertexArray(VAO);
+    
+    glGenBuffers(1, &VBO);  
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);  
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    
+    glGenBuffers(1, &EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    // src/test.vert shader
+    const char *vertexShaderSource = "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "void main()\n"
+    "{\n"
+    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+    "}\0";
+
+    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+
+    // src/test.frag shader
+    const char *fragmentShaderSource = "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "void main()\n"
+    "{\n"
+        "FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+    "}\0";
+
+    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+
+    // Create shader program
+    unsigned int shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+
+    glUseProgram(shaderProgram);
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    // Delete shaders as they're linked into our program now and no longer necessary
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0); 
+
+
+    // Render loop
+    while (!glfwWindowShouldClose(window)) {
+        // Input
+        processInput(window);
+
+        // Render
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);  // Dark teal background
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glUseProgram(shaderProgram);
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+        // Swap buffers and poll events
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    // Clean up
+    glfwTerminate();
+    std::cout << "GLFW + GLAD test completed successfully!" << std::endl;
+    return 0;
 }
