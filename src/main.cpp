@@ -2,12 +2,26 @@
 #include <vector>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <random>
 #include "shader.h"
 
 // ====================== Globals & Constants ======================
 const unsigned int SCR_WIDTH  = 1000;
 const unsigned int SCR_HEIGHT = 1000;
-const unsigned int MAX_PARTICLES = 1000;
+const unsigned int MAX_PARTICLES = 100000;
+const int GRID_SIZE = 300;
+float cellWidth  = 2.0f / GRID_SIZE;
+float cellHeight = 2.0f / GRID_SIZE;
+
+// Mouse state tracking
+bool mousePressed = false;
+float lastSpawnTime = 0.0f;
+const float SPAWN_RATE = 100.0f; // particles per second when holding mouse
+
+// Random number generator for sliding direction
+std::random_device rd;
+std::mt19937 gen(rd());
+std::uniform_int_distribution<> slideDir(0, 1); // 0 = left first, 1 = right first
 
 // ====================== Callbacks ======================
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
@@ -17,14 +31,72 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+    
+    // Track mouse button state
+    mousePressed = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
 }
 
 // ====================== Particle Struct ======================
 struct Particle {
     float x, y;
     float spawnTime;
+    float lastFallTime;
     bool active;
+    bool settled;
+    
+    Particle() : x(0), y(0), spawnTime(0), lastFallTime(0), active(false), settled(false) {}
+    Particle(float px, float py, float time) : x(px), y(py), spawnTime(time), lastFallTime(time), active(true), settled(false) {}
 };
+
+// Helper function to convert world coordinates to grid coordinates
+void worldToGrid(float worldX, float worldY, int& gridX, int& gridY) {
+    gridX = (int)((worldX + 1.0f) / 2.0f * GRID_SIZE);
+    gridY = (int)((worldY + 1.0f) / 2.0f * GRID_SIZE);
+    
+    // Clamp to valid range
+    gridX = std::max(0, std::min(GRID_SIZE - 1, gridX));
+    gridY = std::max(0, std::min(GRID_SIZE - 1, gridY));
+}
+
+// Helper function to convert grid coordinates to world coordinates (center of cell)
+void gridToWorld(int gridX, int gridY, float& worldX, float& worldY) {
+    worldX = (gridX + 0.5f) * cellWidth - 1.0f;
+    worldY = (gridY + 0.5f) * cellHeight - 1.0f;
+}
+
+// Check if a grid position is valid and empty
+bool isValidAndEmpty(const std::vector<std::vector<bool>>& grid, int x, int y) {
+    return x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE && !grid[x][y];
+}
+
+// Try to slide the particle left or right
+bool trySlide(Particle& p, std::vector<std::vector<bool>>& grid, int currentGridX, int currentGridY) {
+    // Randomly choose which direction to try first
+    bool tryLeftFirst = slideDir(gen) == 0;
+    
+    for (int attempt = 0; attempt < 2; attempt++) {
+        int slideX = currentGridX + (tryLeftFirst ? -1 : 1);
+        
+        // Check if we can slide to this position and then fall
+        if (isValidAndEmpty(grid, slideX, currentGridY)) {
+            // Check if there's space to fall diagonally
+            if (isValidAndEmpty(grid, slideX, currentGridY - 1)) {
+                // Clear current position
+                grid[currentGridX][currentGridY] = false;
+                
+                // Move to slide position and fall
+                gridToWorld(slideX, currentGridY - 1, p.x, p.y);
+                grid[slideX][currentGridY - 1] = true;
+                return true;
+            }
+        }
+        
+        // Try the other direction
+        tryLeftFirst = !tryLeftFirst;
+    }
+    
+    return false; // Couldn't slide either direction
+}
 
 int main() {
     // Initialize GLFW
@@ -39,7 +111,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     
     // Create window
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Mouse Particle Spawn", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Falling Sand with Sliding", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window\n";
         glfwTerminate();
@@ -92,7 +164,7 @@ int main() {
     glBufferData(GL_ARRAY_BUFFER, MAX_PARTICLES * 2 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
-    glVertexAttribDivisor(1, 1); // Update per instance
+    glVertexAttribDivisor(1, 1);
 
     // Instance buffer for spawn times
     unsigned int instanceVBO2;
@@ -101,62 +173,142 @@ int main() {
     glBufferData(GL_ARRAY_BUFFER, MAX_PARTICLES * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
     glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(float), (void*)0);
     glEnableVertexAttribArray(2);
-    glVertexAttribDivisor(2, 1); // Update per instance
+    glVertexAttribDivisor(2, 1);
 
     glBindVertexArray(0);
 
+    // Initialize grid and particles
     std::vector<Particle> particles;
-
-    // ====================== Render Loop ======================
+    std::vector<std::vector<bool>> grid(GRID_SIZE, std::vector<bool>(GRID_SIZE, false));
+    
+    float lastTime = glfwGetTime();
+    float fallSpeed = 100.0f; // Random fall speed between 20 and 50
+    
+    // ====================== Render & Update Loop ======================
     while (!glfwWindowShouldClose(window)) {
         processInput(window);
-        glClearColor(0.1f, 0.1f, 0.2f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // Get mouse position in NDC
-        double mouseX, mouseY;
-        glfwGetCursorPos(window, &mouseX, &mouseY);
-        float ndcX = 2.0f * (mouseX / SCR_WIDTH) - 1.0f;
-        float ndcY = 1.0f - 2.0f * (mouseY / SCR_HEIGHT);
+        float currentTime = glfwGetTime();
+        float deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
 
-        // Spawn a new particle at mouse
-        if (particles.size() < MAX_PARTICLES) {
-            particles.push_back({ndcX, ndcY, (float)glfwGetTime(), true});
-        }
+        // ------------------- Spawn Particle While Mouse Held -------------------
+        if (mousePressed && (currentTime - lastSpawnTime) >= (1.0f / SPAWN_RATE)) {
+            double mouseX, mouseY;
+            glfwGetCursorPos(window, &mouseX, &mouseY);
+            float ndcX = 2.0f * (mouseX / SCR_WIDTH) - 1.0f;
+            float ndcY = 1.0f - 2.0f * (mouseY / SCR_HEIGHT);
 
-        // Fill instance arrays
-        std::vector<float> spawnPositions(MAX_PARTICLES * 2, 0.0f);
-        std::vector<float> spawnTimes(MAX_PARTICLES, 0.0f);
-        unsigned int count = 0;
-        for (auto &p : particles) {
-            if (p.active) {
-                spawnPositions[count * 2 + 0] = p.x;
-                spawnPositions[count * 2 + 1] = p.y;
-                spawnTimes[count] = p.spawnTime;
-                count++;
+            int mouseGridX, mouseGridY;
+            worldToGrid(ndcX, ndcY, mouseGridX, mouseGridY);
+            
+            bool spawned = false;
+            int searchRadius = 3;
+            
+            for (int dy = 0; dy <= searchRadius && !spawned; dy++) {
+                for (int dx = -dy; dx <= dy && !spawned; dx++) {
+                    int checkX = mouseGridX + dx;
+                    int checkY = mouseGridY + dy;
+                    
+                    for (int yOffset : {0, -dy}) {
+                        if (yOffset != 0 && dy == 0) continue;
+                        int finalY = checkY + yOffset;
+                        
+                        if (particles.size() >= MAX_PARTICLES) {
+                            spawned = true;
+                            break;
+                        }
+                        
+                        if (isValidAndEmpty(grid, checkX, finalY)) {
+                            float spawnX, spawnY;
+                            gridToWorld(checkX, finalY, spawnX, spawnY);
+                            particles.emplace_back(spawnX, spawnY, currentTime);
+                            grid[checkX][finalY] = true;
+                            lastSpawnTime = currentTime;
+                            spawned = true;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
-        // Update VBOs
-        glBindBuffer(GL_ARRAY_BUFFER, instanceVBO1);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, count * 2 * sizeof(float), spawnPositions.data());
-        glBindBuffer(GL_ARRAY_BUFFER, instanceVBO2);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, count * sizeof(float), spawnTimes.data());
+        // ------------------- Update Particles with Sliding Logic -------------------
+        for (int i = particles.size() - 1; i >= 0; --i) {
+            Particle& p = particles[i];
+            if (!p.active || p.settled) continue;
 
-        // Draw particles
-        shader.use();
-        glUniform1f(glGetUniformLocation(shader.ID, "size"), 0.01f);
-        glUniform1f(glGetUniformLocation(shader.ID, "fallspeed"), 0.5f);
-        glUniform1f(glGetUniformLocation(shader.ID, "time"), (float)glfwGetTime());
+            int currentGridX, currentGridY;
+            worldToGrid(p.x, p.y, currentGridX, currentGridY);
+            
+            float timeSinceLastFall = currentTime - p.lastFallTime;
+            float fallInterval = 1.0f / fallSpeed;
+            
+            if (timeSinceLastFall >= fallInterval) {
+                // Try to fall straight down first
+                if (isValidAndEmpty(grid, currentGridX, currentGridY - 1)) {
+                    // Clear current position
+                    grid[currentGridX][currentGridY] = false;
+                    
+                    // Move down one cell
+                    currentGridY--;
+                    gridToWorld(currentGridX, currentGridY, p.x, p.y);
+                    grid[currentGridX][currentGridY] = true;
+                    
+                    p.lastFallTime = currentTime;
+                } 
+                // If can't fall straight down, try to slide
+                else if (trySlide(p, grid, currentGridX, currentGridY)) {
+                    p.lastFallTime = currentTime;
+                } 
+                // If can't slide either, particle has settled
+                else {
+                    p.settled = true;
+                }
+            }
+        }
 
-        glBindVertexArray(VAO);
-        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, count);
+        // ------------------- Fill Instance Buffers -------------------
+        std::vector<float> spawnPositions;
+        std::vector<float> spawnTimes;
+        
+        for (const auto& p : particles) {
+            if (p.active) {
+                spawnPositions.push_back(p.x);
+                spawnPositions.push_back(p.y);
+                spawnTimes.push_back(p.spawnTime);
+            }
+        }
+        
+        unsigned int count = spawnTimes.size();
+
+        if (count > 0) {
+            glBindBuffer(GL_ARRAY_BUFFER, instanceVBO1);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, count * 2 * sizeof(float), spawnPositions.data());
+            glBindBuffer(GL_ARRAY_BUFFER, instanceVBO2);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, count * sizeof(float), spawnTimes.data());
+        }
+
+        // ------------------- Draw Particles -------------------
+        if (count > 0) {
+            shader.use();
+            glUniform1f(glGetUniformLocation(shader.ID, "size"), cellWidth);
+            glUniform1f(glGetUniformLocation(shader.ID, "fallspeed"), std::max(0.1f, 0.0f));
+            glUniform1f(glGetUniformLocation(shader.ID, "time"), currentTime);
+            glUniform1f(glGetUniformLocation(shader.ID, "cellWidth"), cellWidth);
+            glUniform1f(glGetUniformLocation(shader.ID, "cellHeight"), cellHeight);
+
+            glBindVertexArray(VAO);
+            glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, count);
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     glfwTerminate();
-    std::cout << "Mouse Particle Spawn completed successfully!\n";
+    std::cout << "Falling Sand with Sliding completed successfully!\n";
     return 0;
 }
