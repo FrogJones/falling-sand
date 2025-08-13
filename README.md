@@ -12,8 +12,8 @@ Still in very early development — much more to come!
 
 ## 🚧 Status
 
-> 🧪 Currently experimenting with falling and sliding logic.  
-> The system simulates sand piling realistically — but lots of features are still missing.
+> 🧪 Currently experimenting with GLAD/GLFW and sliding logic.  
+> No sand yet.
 
 ## 🛠 Requirements
 
