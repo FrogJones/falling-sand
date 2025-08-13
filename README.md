@@ -12,8 +12,9 @@ Still in very early development — much more to come!
 
 ## 🚧 Status
 
-> 🧪 Currently experimenting with GLAD/GLFW and sliding logic.  
-> No sand yet.
+> 🧪 Currently experimenting with GLAD/GLFW and falling logic.  
+> falling sand
+> need to work on collision logic
 
 ## 🛠 Requirements
 
