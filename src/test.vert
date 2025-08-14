@@ -1,5 +1,4 @@
 // test shader for openGL 3.3 in glsl
-// test shader for openGL 3.3 in glsl
 #version 330 core
 
 layout (location = 0) in vec3 aPos;       // base square vertex
@@ -21,11 +20,10 @@ void main()
     
     gl_Position = vec4(pos, 1.0);
 
-    // Color based on particle position with some time-based variation
-    float age = time - aSpawnTime;
+    // Color based on particle position
     vertexColor = vec3(
         aSpawnPos.x * 0.5 + 0.5, 
         aSpawnPos.y * 0.5 + 0.5, 
-        0.5 + 0.3 * sin(age * 2.0)
+        0.5
     );
 }
